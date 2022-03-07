@@ -54,7 +54,26 @@ static void bad_exit(PGconn *conn)
 
 int printCustomerPaymentInfo(PGconn *conn, int theCustID)
 {
-
+    char command[500];
+    sprintf(command, "SELECT name FROM Customers WHERE custID = %d;", theCustID);
+    PGresult *res = PQexec(conn, command);
+    if (PQntuples(res) < 1) {
+        PQclear(res);
+        return -1;
+    }
+    printf("Customer %d %s ", theCustID, PQgetvalue(res, 0, 0));
+    PQclear(res);
+    memset(command, 0, strlen(command));
+    sprintf(command, "SELECT * FROM Customers C, PaymentMethods M, Payments P WHERE C.custID = %d AND M.custID = %d AND M.cardType = P.cardType AND M.cardNum = P.cardNum AND P.paymentDate > M.expirationDate;", theCustID, theCustID);
+    res = PQexec(conn, command);
+    printf("expired: %d ", PQntuples(res));
+    PQclear(res);
+    memset(command, 0, strlen(command));
+    sprintf(command, "SELECT * FROM Customers C, PaymentMethods M, Payments P WHERE C.custID = %d AND M.custID = %d AND M.cardType = P.cardType AND M.cardNum = P.cardNum AND P.paymentDate <= M.expirationDate;", theCustID, theCustID);
+    res = PQexec(conn, command);
+    printf("unexpired: %d\n", PQntuples(res));
+    PQclear(res);
+    return 0;
 }
 
 /* Function: updateIsValid:
@@ -67,7 +86,24 @@ int printCustomerPaymentInfo(PGconn *conn, int theCustID)
 
 int updateIsValid(PGconn *conn, char *theCardType, int theCardNum)
 {
-
+    char command[500];
+    sprintf(command, "SELECT * FROM PaymentMethods WHERE cardType = '%s' AND cardNum = %d;", theCardType, theCardNum);
+    PGresult *res = PQexec(conn, command);
+    if (PQntuples(res) < 1) {
+        return -1;
+    }
+    PQclear(res);
+    memset(command, 0, strlen(command));
+    sprintf(command, "SELECT isValid FROM PaymentMethods WHERE cardType = '%s' AND cardNum = %d AND CURRENT_DATE > expirationDate;", theCardType, theCardNum);
+    res = PQexec(conn, command);
+    if (PQntuples(res) < 1 || strcmp(PQgetvalue(res, 0, 0), "f") == 0) {
+        return 0;
+    }
+    PQclear(res);
+    memset(command, 0, strlen(command));
+    sprintf(command, "UPDATE PaymentMethods SET isValid = 'FALSE' WHERE cardType = '%s' AND cardNum = %d;", theCardType, theCardNum);
+    res = PQexec(conn, command);
+    return 1;
 }
 
 /* Function: changeSomeAmountPaid:
@@ -82,7 +118,10 @@ int updateIsValid(PGconn *conn, char *theCardType, int theCardNum)
 
 int changeSomeAmountPaid(PGconn *conn, int theCustID, int maxReduction)
 {
-    
+    char command[100];
+    sprintf(command, "SELECT changeSomeAmountPaidFunction(%d, %d);", theCustID, maxReduction);
+    PGresult *res = PQexec(conn, command);
+    return atoi(PQgetvalue(res, 0, 0));
 }
 
 int main(int argc, char **argv)
@@ -120,7 +159,14 @@ int main(int argc, char **argv)
     /* Perform the calls to printCustomerPaymentInfo listed in Section 6 of Lab4,
      * and print their results as described.
      */
-    
+    result = printCustomerPaymentInfo(conn, 104);
+    if (result == -1) {
+        printf("No customer exists whose id is 104\n");
+    }
+    result = printCustomerPaymentInfo(conn, 102);
+    if (result == -1) {
+        printf("No customer exists whose id is 102\n");
+    }
     /* Extra newline for readability */
     printf("\n");
 
@@ -128,7 +174,37 @@ int main(int argc, char **argv)
     /* Perform the calls to updateIsValid listed in Section 6 of Lab4,
      * and print their results as described.
      */
-    
+    result = updateIsValid(conn, "M", 5380746);
+    if (result == 1) {
+        printf("Validity changed for cardType M and cardNum 5380746\n");
+    } else if (result == 0) {
+        printf("Validity not changed for cardType M and cardNum 5380746\n");
+    } else if (result == -1) {
+        printf("No such cardType M and cardNum 5380746\n");
+    } else {
+        bad_exit(conn);
+    }
+    result = updateIsValid(conn, "V", 6011024);
+    if (result == 1) {
+        printf("Validity changed for cardType V and cardNum 6011024\n");
+    } else if (result == 0) {
+        printf("Validity not changed for cardType V and cardNum 6011024\n");
+    } else if (result == -1) {
+        printf("No such cardType V and cardNum 6011024\n");
+    } else {
+        bad_exit(conn);
+    }
+    result = updateIsValid(conn, "M", 5380346);
+    if (result == 1) {
+        printf("Validity changed for cardType M and cardNum 5380346\n");
+    } else if (result == 0) {
+        printf("Validity not changed for cardType M and cardNum 5380346\n");
+    } else if (result == -1) {
+        printf("No such cardType M and cardNum 5380346\n");
+    } else {
+        bad_exit(conn);
+    }
+
     /* Extra newline for readability */
     printf("\n");
 
@@ -136,6 +212,39 @@ int main(int argc, char **argv)
     /* Perform the calls to changeSomeAmountPaid listed in Section 6 of Lab4,
      * and print their results as described.
      */
+    result = changeSomeAmountPaid(conn, 104, 14);
+    if (result >= 0) {
+        printf("Total reduction for %d and maxReduction: is %d\n", 104, result);
+    } else if (result == -1) {
+        printf("Max reduction is negative\n");
+    } else if (result == -2) {
+        printf("CustID %d not found\n", 104);
+    }
+    result = changeSomeAmountPaid(conn, 100, 16);
+    if (result >= 0) {
+        printf("Total reduction for %d and maxReduction: is %d\n", 100, result);
+    } else if (result == -1) {
+        printf("Max reduction is negative\n");
+    } else if (result == -2) {
+        printf("CustID %d not found\n", 100);
+    }
+    result = changeSomeAmountPaid(conn, 20, 4);
+    if (result >= 0) {
+        printf("Total reduction for %d and maxReduction: is %d\n", 20, result);
+    } else if (result == -1) {
+        printf("Max reduction is negative\n");
+    } else if (result == -2) {
+        printf("CustID %d not found\n", 20);
+    }
+    result = changeSomeAmountPaid(conn, 104, 14);
+    if (result >= 0) {
+        printf("Total reduction for %d and maxReduction: is %d\n", 104, result);
+    } else if (result == -1) {
+        printf("Max reduction is negative\n");
+    } else if (result == -2) {
+        printf("CustID %d not found\n", 104);
+    }
+
 
     good_exit(conn);
     return 0;
