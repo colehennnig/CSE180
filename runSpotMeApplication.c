@@ -54,7 +54,7 @@ static void bad_exit(PGconn *conn)
 
 int printCustomerPaymentInfo(PGconn *conn, int theCustID)
 {
-    char command[500];
+    char command[MAXSQLSTATEMENTSTRINGSIZE];
     sprintf(command, "SELECT name FROM Customers WHERE custID = %d;", theCustID);
     PGresult *res = PQexec(conn, command);
     if (PQntuples(res) < 1) {
@@ -86,7 +86,7 @@ int printCustomerPaymentInfo(PGconn *conn, int theCustID)
 
 int updateIsValid(PGconn *conn, char *theCardType, int theCardNum)
 {
-    char command[500];
+    char command[MAXSQLSTATEMENTSTRINGSIZE];
     sprintf(command, "SELECT * FROM PaymentMethods WHERE cardType = '%s' AND cardNum = %d;", theCardType, theCardNum);
     PGresult *res = PQexec(conn, command);
     if (PQntuples(res) < 1) {
@@ -118,7 +118,7 @@ int updateIsValid(PGconn *conn, char *theCardType, int theCardNum)
 
 int changeSomeAmountPaid(PGconn *conn, int theCustID, int maxReduction)
 {
-    char command[100];
+    char command[MAXSQLSTATEMENTSTRINGSIZE];
     sprintf(command, "SELECT changeSomeAmountPaidFunction(%d, %d);", theCustID, maxReduction);
     PGresult *res = PQexec(conn, command);
     return atoi(PQgetvalue(res, 0, 0));
@@ -162,14 +162,17 @@ int main(int argc, char **argv)
     result = printCustomerPaymentInfo(conn, 104);
     if (result == -1) {
         printf("No customer exists whose id is 104\n");
+    } else if (result != 0) {
+        printf("Error from function call: printCustomerPaymentInfo\n");
     }
     result = printCustomerPaymentInfo(conn, 102);
     if (result == -1) {
         printf("No customer exists whose id is 102\n");
+    } else if (result != 0) {
+        printf("Error from function call: printCustomerPaymentInfo\n");
     }
     /* Extra newline for readability */
     printf("\n");
-
     
     /* Perform the calls to updateIsValid listed in Section 6 of Lab4,
      * and print their results as described.
@@ -182,6 +185,7 @@ int main(int argc, char **argv)
     } else if (result == -1) {
         printf("No such cardType M and cardNum 5380746\n");
     } else {
+        printf("Error from function call: updateIsValid\n");
         bad_exit(conn);
     }
     result = updateIsValid(conn, "V", 6011024);
@@ -192,6 +196,7 @@ int main(int argc, char **argv)
     } else if (result == -1) {
         printf("No such cardType V and cardNum 6011024\n");
     } else {
+        printf("Error from function call: updateIsValid\n");
         bad_exit(conn);
     }
     result = updateIsValid(conn, "M", 5380346);
@@ -202,12 +207,12 @@ int main(int argc, char **argv)
     } else if (result == -1) {
         printf("No such cardType M and cardNum 5380346\n");
     } else {
+        printf("Error from function call: updateIsValid\n");
         bad_exit(conn);
     }
 
     /* Extra newline for readability */
     printf("\n");
-
     
     /* Perform the calls to changeSomeAmountPaid listed in Section 6 of Lab4,
      * and print their results as described.
@@ -244,7 +249,6 @@ int main(int argc, char **argv)
     } else if (result == -2) {
         printf("CustID %d not found\n", 104);
     }
-
 
     good_exit(conn);
     return 0;
